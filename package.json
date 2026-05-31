@@ -1,0 +1,39 @@
+{
+  "name": "apolo-content-hub",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "eslint",
+    "postinstall": "patch-package",
+    "seed": "node scripts/seed.mjs",
+    "generate:types": "payload generate:types",
+    "generate:importmap": "payload generate:importmap"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.81.0",
+    "@payloadcms/next": "3.81.0",
+    "@payloadcms/plugin-seo": "3.81.0",
+    "@payloadcms/ui": "3.81.0",
+    "dotenv": "^17.4.1",
+    "graphql": "^16.13.2",
+    "next": "16.2.2",
+    "payload": "3.81.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "patch-package": "^8.0.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
