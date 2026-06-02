@@ -208,8 +208,12 @@ they only hit the public-read endpoints above.
 
 | Collection            | Public read                          | Public create | Notes |
 |-----------------------|--------------------------------------|---------------|-------|
-| `renditions`          | ✅ `status: published` only          | ❌            | What frontends serve. SEO plugin → `meta.*`. |
-| `site-configs`        | ✅                                   | ❌            | Theme/nav/parent-brand per site. |
+| `renditions`          | ✅ `status: published` only          | ❌            | What frontends serve. SEO plugin → `meta.*`. Tenant: `site`. |
+| `pages`               | ✅ `status: published` only          | ❌            | Per-site CMS feature pages. Tenant: `site`. |
+| `navigation`          | ✅                                   | ❌            | Per-site header/footer global (1/site). Tenant: `site`. |
+| `site-settings`       | ✅                                   | ❌            | Per-site NAP/analytics/OG global (1/site). Tenant: `site`. |
+| `categories`          | ✅                                   | ❌            | Shared blog/news taxonomy. |
+| `site-configs`        | ✅ (tenants collection)              | ❌            | Theme/nav/parent-brand per site. |
 | `practice-areas`      | ✅                                   | ❌            | Shared taxonomy. |
 | `glossary`            | ✅                                   | ❌            | Shared boilerplate. |
 | `disclaimers`         | ✅                                   | ❌            | Shared boilerplate. |
@@ -221,3 +225,58 @@ they only hit the public-read endpoints above.
 
 "Public create ❌" means writes require an authenticated CMS user; performed in /admin or via
 authenticated scripts, not by frontends.
+
+---
+
+## Multi-tenant v2 additions (2026-06)
+
+The hub now uses `@payloadcms/plugin-multi-tenant`: **`site-configs` is the tenants
+collection**, and the admin has a **site selector** (top nav) that scopes admin lists.
+Mr Hien (role `admin`) sees all sites. A custom **Site Explorer** view (`/admin/site-explorer`)
+shows a chosen site's pages, renditions, and images in one pane.
+
+**Tenant field.** Tenant-scoped collections carry a `site` relationship (→ `site-configs`).
+This is the SAME field name renditions already used, so existing queries are unchanged.
+Tenant-scoped collections set `useTenantAccess:false` so public reads keep working — frontends
+fetch unauthenticated exactly as before.
+
+### New / changed endpoints (all public read, published-or-authed where noted)
+
+```
+GET /api/pages?where[and][0][site.domain][equals]={domain}&where[and][1][pageType][equals]={home|about|contact|practice-landing|custom}&where[and][2][status][equals]=published&depth=1
+GET /api/navigation?where[site.domain][equals]={domain}&depth=1          → one doc/site (header/footer chrome)
+GET /api/site-settings?where[site.domain][equals]={domain}&depth=1       → one doc/site (NAP, analytics, OG, frontendBaseUrl, social)
+GET /api/categories?where[locale][equals]={vi|en}                        → shared blog/news taxonomy
+GET /api/renditions?...&where[and][2][contentType][equals]={article|blog|news}   → filter by content type
+```
+
+- **`pages`** — per-site feature pages. Fields: `title`, `slug`, `pageType`, `body` (markdown),
+  `heroHeading`, `heroSubheading`, `heroImageUrl`, `excerpt`, `status`, SEO `meta.*`. Published-only public.
+- **`navigation`** (global, 1/site) — `logoUrl`, `headerLinks[]{label,href}`, `headerCta{label,href}`,
+  `footerColumns[]{heading,links[]}`, `footerLegal`, `socialLinks[]{platform,url}`.
+- **`site-settings`** (global, 1/site) — `nap{legalName,address,phone,email}`,
+  `analytics{googleAnalyticsId,gtmId}`, `defaultOgImageUrl`, `frontendBaseUrl`, `socialLinks[]`.
+  (The revalidation secret is NOT here — it lives in `REVALIDATE_SECRET` env.)
+- **`renditions`** gained `contentType` (article/blog/news), `category` (→ categories), `tags[]`,
+  and `stale` (read-only; auto-set when the source article changes after the rendition).
+- **`media`** gained `sites[]` (association) + `isShared` (cross-site reuse pool). Uploads now land
+  in **Cloudflare R2** via the s3 adapter; `url` resolves to the public R2 CDN.
+
+### Fan-out (authenticated)
+
+```
+POST /api/articles/{id}/fan-out   body: { "mode": "differentiate" | "syndicate" }
+```
+Creates one DRAFT rendition per `targetSites` entry. `differentiate` → self-canonical (SEO money
+pages); `syndicate` → verbatim body with canonical → the primary (first) site (blog/news, duplicate-safe).
+Idempotent: existing `(site, slug)` renditions are skipped.
+
+### On-demand revalidation
+
+After a rendition/page/navigation/site-settings change, the hub fire-and-forget POSTs the affected
+site's frontend:
+```
+POST {frontendBaseUrl}/api/revalidate?secret={REVALIDATE_SECRET}&path={/slug | /}
+```
+`frontendBaseUrl` comes from that site's `site-settings`; the secret is the shared `REVALIDATE_SECRET`
+env (same value on hub + every frontend). Frontends expose `/api/revalidate` (template route).

@@ -15,14 +15,16 @@ The hub is the one app with a database. It needs Fluid Compute (connection reuse
 2. **Environment variables** (Project → Settings → Environment Variables) — copy from `hub/.env.local`:
    | Key | Value |
    |---|---|
-   | `DATABASE_URI` | `postgresql://postgres.zxmdegfnjbvytjnwfhfq:6WD%23JKug2_S.Yd7@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres` |
-   | `PAYLOAD_SECRET` | `GijI0DDTTyWlpLkrQ8_Lh8cRhormMcKHBTRixNjvOGU` |
+   | `DATABASE_URI` | Session Pooler URI — copy from `hub/.env.local` (real value in `PM_CREDENTIALS.md`). |
+   | `PAYLOAD_SECRET` | copy from `hub/.env.local` (real value in `PM_CREDENTIALS.md`). |
    | `NEXT_PUBLIC_SITE_URL` | `https://<your-hub-domain>` (set after first deploy, then redeploy) |
-   (The `%23` encoding of the `#` in the password is REQUIRED in the URI.)
+   | `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_PUBLIC_URL` | Cloudflare R2 media storage — copy from `hub/.env.local`. Without these, uploads fall back to ephemeral disk. |
+   | `REVALIDATE_SECRET` | shared on-demand-revalidation secret — same value on every frontend. From `hub/.env.local`. |
+   (The `%23` encoding of the `#` in the DB password is REQUIRED in the URI. **Never commit real secrets — they live only in `.env.local` (git-ignored) and `PM_CREDENTIALS.md`.**)
 3. **Enable Fluid Compute**: Project → Settings → Functions → Fluid Compute = ON. (Reuses the pg connection across invocations — prevents Payload cold-start pool churn. Without it the hub can exhaust the Supabase pooler under traffic.)
 4. **Node version**: 22 (Project → Settings → Build & Development → Node.js Version).
 5. Deploy. Then:
-   - Visit `https://<hub-domain>/admin` → log in (`matvietdesignteam@gmail.com` / `K7kYhVkPa0_sblTw`) → **change the password**.
+   - Visit `https://<hub-domain>/admin` → log in (`matvietdesignteam@gmail.com` / password in `PM_CREDENTIALS.md`) → **change the password**.
    - Smoke test public read: `curl 'https://<hub-domain>/api/site-configs?where%5Bdomain%5D%5Bequals%5D=luatsudansu.vn'` → expect JSON.
 6. **Note the public hub URL** — every frontend's `HUB_API_URL` points here.
 

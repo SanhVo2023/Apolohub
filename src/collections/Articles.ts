@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { autoSlug } from '@/hooks/auto-slug'
 import { authenticated, adminOnly } from '@/lib/access'
+import { markRenditionsStale, fanOutEndpoint } from '@/hooks/articles'
 
 /**
  * Articles — the canonical SOURCE content. Write-once master copy, NEVER served
@@ -53,6 +54,17 @@ export const Articles: CollectionConfig = {
       admin: { position: 'sidebar' },
     },
     {
+      name: 'contentType',
+      type: 'select',
+      defaultValue: 'article',
+      options: [
+        { label: 'Article (SEO)', value: 'article' },
+        { label: 'Blog', value: 'blog' },
+        { label: 'News', value: 'news' },
+      ],
+      admin: { position: 'sidebar', description: 'Carried onto renditions created via Fan-out.' },
+    },
+    {
       name: 'practiceAreas',
       type: 'relationship',
       relationTo: 'practice-areas',
@@ -64,6 +76,7 @@ export const Articles: CollectionConfig = {
       hasMany: true,
       admin: { description: 'Free-text topic tags.' },
     },
+    { name: 'category', type: 'relationship', relationTo: 'categories', admin: { description: 'Default archive category (blog / news). Carried onto renditions.' } },
     {
       name: 'targetSites',
       type: 'relationship',
@@ -96,5 +109,7 @@ export const Articles: CollectionConfig = {
   ],
   hooks: {
     beforeChange: [autoSlug('title')],
+    afterChange: [markRenditionsStale],
   },
+  endpoints: [fanOutEndpoint],
 }
