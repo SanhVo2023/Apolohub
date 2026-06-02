@@ -25,6 +25,19 @@ export const Media: CollectionConfig = {
     { name: 'alt', type: 'text', required: true },
     { name: 'caption', type: 'text' },
     {
+      name: 'sites',
+      type: 'relationship',
+      relationTo: 'site-configs',
+      hasMany: true,
+      admin: { description: 'Sites this image is associated with (drives the per-site image list in Site Explorer). Leave empty for shared/reusable assets.' },
+    },
+    {
+      name: 'isShared',
+      type: 'checkbox',
+      defaultValue: true,
+      admin: { description: 'Part of the cross-site reuse pool — visible to every site, not just the ones in “sites”.' },
+    },
+    {
       name: 'externalUrl',
       type: 'text',
       admin: {

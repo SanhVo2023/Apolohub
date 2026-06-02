@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { buildConfig } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { seoPlugin } from '@payloadcms/plugin-seo'
+import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { s3Storage } from '@payloadcms/storage-s3'
 import sharp from 'sharp'
 
 import { Users } from './collections/Users'
@@ -16,9 +18,13 @@ import { Authors } from './collections/Authors'
 import { PracticeAreas } from './collections/PracticeAreas'
 import { Glossary } from './collections/Glossary'
 import { Disclaimers } from './collections/Disclaimers'
+import { Categories } from './collections/Categories'
 import { SiteConfigs } from './collections/SiteConfigs'
 import { Articles } from './collections/Articles'
 import { Renditions } from './collections/Renditions'
+import { Pages } from './collections/Pages'
+import { Navigation } from './collections/Navigation'
+import { SiteSettings } from './collections/SiteSettings'
 import { ContactSubmissions } from './collections/ContactSubmissions'
 
 const filename = fileURLToPath(import.meta.url)
@@ -38,6 +44,16 @@ export default buildConfig({
   admin: {
     user: Users.slug,
     importMap: { baseDir: path.resolve(dirname) },
+    components: {
+      // Custom "Site Explorer" view — everything for one site in one pane.
+      views: {
+        siteExplorer: {
+          Component: '@/components/SiteExplorer#SiteExplorer',
+          path: '/site-explorer',
+        },
+      },
+      afterNavLinks: ['@/components/SiteExplorerNavLink#SiteExplorerNavLink'],
+    },
     meta: {
       titleSuffix: ' — Apolo Content Hub',
     },
@@ -50,9 +66,13 @@ export default buildConfig({
     PracticeAreas,
     Glossary,
     Disclaimers,
-    SiteConfigs,
+    Categories,
+    SiteConfigs, // ← tenants collection (one row per ecosystem site)
     Articles,
     Renditions,
+    Pages,
+    Navigation, // per-site global (1 doc / site)
+    SiteSettings, // per-site global (1 doc / site)
     ContactSubmissions,
   ],
 
@@ -70,13 +90,60 @@ export default buildConfig({
 
   plugins: [
     seoPlugin({
-      collections: ['renditions'],
+      collections: ['renditions', 'pages'],
       uploadsCollection: 'media',
       generateTitle: ({ doc }) => {
         const title = typeof doc?.title === 'string' ? doc.title : 'Apolo'
         return `${title} | Apolo Lawyers`
       },
       generateDescription: ({ doc }) => (typeof doc?.excerpt === 'string' ? doc.excerpt : ''),
+    }),
+
+    // Multi-tenant: each ecosystem site is a tenant. site-configs IS the tenants
+    // collection; the plugin adds the `site` relationship to tenant-enabled
+    // collections (same name as the old manual Renditions.site → data preserved)
+    // and a site selector to the admin. Admins (Mr Hien) see every tenant.
+    //
+    // Tenant-enabled collections set useTenantAccess:false so PUBLIC, unauthenticated
+    // frontend reads keep working (access stays governed by publicRead /
+    // publishedOrAuthed). The admin list view is still scoped by the selector via
+    // the default baseListFilter.
+    multiTenantPlugin({
+      tenantsSlug: 'site-configs',
+      tenantField: { name: 'site', access: { read: () => true } },
+      useTenantsCollectionAccess: false,
+      useTenantsListFilter: false,
+      userHasAccessToAllTenants: (user) => Boolean(user) && user?.role === 'admin',
+      collections: {
+        renditions: { useTenantAccess: false },
+        pages: { useTenantAccess: false },
+        navigation: { isGlobal: true, useTenantAccess: false },
+        'site-settings': { isGlobal: true, useTenantAccess: false },
+      },
+    }),
+
+    // Media storage → Cloudflare R2 (S3-compatible). Replaces the Supabase bucket.
+    // Disabled automatically if R2 env is absent (local dev without creds).
+    s3Storage({
+      enabled: Boolean(process.env.R2_BUCKET),
+      collections: {
+        media: {
+          disablePayloadAccessControl: true,
+          prefix: 'hub/media',
+          generateFileURL: ({ filename, prefix }) =>
+            `${process.env.R2_PUBLIC_URL}/${prefix ? `${prefix}/` : ''}${filename}`,
+        },
+      },
+      bucket: process.env.R2_BUCKET || '',
+      config: {
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+        },
+        region: 'auto',
+        endpoint: process.env.R2_ENDPOINT,
+        forcePathStyle: true,
+      },
     }),
   ],
 
